@@ -122,7 +122,7 @@ class BotManager:
                     titulo = cupom["titulo"]
                     descricao = cupom["descricao"]
                     link = shorten_url(cupom["link"])
-                    caption = f"🎁 {titulo}\n\n📝 {descricao}\n\n🔗 {link}\n\n}"
+                    caption = f"🎁 {titulo}\n\n📝 {descricao}\n\n🔗 {link}"
 
                     # Tenta baixar imagem do cupom, se disponível
                     imagem_gerada = False
