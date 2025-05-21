@@ -5,7 +5,6 @@ import time
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Bot
 from dotenv import load_dotenv
-from keep_alive import keep_alive
 import random
 import signal
 
@@ -102,7 +101,7 @@ class BotManager:
             return []
 
     async def post_cupons(self):
-        """Posta cupons no canal do Telegram."""
+        """Posta um único cupom no canal do Telegram a cada ciclo."""
         try:
             print("🔎 Buscando cupons...")
             cupons = await self.get_cupons()
@@ -117,50 +116,51 @@ class BotManager:
                 self.posted_coupons.clear()  # Limpa o histórico se não houver novos cupons
                 new_coupons = cupons
 
-            # Escolhe um cupom aleatoriamente
-            cupom = random.choice(new_coupons) if new_coupons else random.choice(cupons)
-            try:
-                titulo = cupom["titulo"]
-                descricao = cupom["descricao"]
-                link = shorten_url(cupom["link"])
-                caption = f"🎁 {titulo}\n\n📝 {descricao}\n\n🔗 {link}\n\nFonte: {cupom['fonte']}"
+            if new_coupons:  # Garante que apenas um cupom seja postado por ciclo
+                cupom = new_coupons[0]  # Usa o primeiro cupom novo
+                try:
+                    titulo = cupom["titulo"]
+                    descricao = cupom["descricao"]
+                    link = shorten_url(cupom["link"])
+                    caption = f"🎁 {titulo}\n\n📝 {descricao}\n\n🔗 {link}\n\n}"
 
-                # Tenta baixar imagem do cupom, se disponível
-                imagem_gerada = False
-                if cupom.get("imagem"):
-                    imagem_gerada = download_image(cupom["imagem"], "cupom.png")
-                if not imagem_gerada:
-                    create_image(titulo)  # Gera imagem local se não houver imagem online
+                    # Tenta baixar imagem do cupom, se disponível
+                    imagem_gerada = False
+                    if cupom.get("imagem"):
+                        imagem_gerada = download_image(cupom["imagem"], "cupom.png")
+                    if not imagem_gerada:
+                        create_image(titulo)  # Gera imagem local se não houver imagem online
 
-                # Verifica se a imagem existe antes de enviar
-                if os.path.exists("cupom.png"):
-                    with open("cupom.png", "rb") as img:
-                        await self.bot.send_photo(
+                    # Verifica se a imagem existe antes de enviar
+                    if os.path.exists("cupom.png"):
+                        with open("cupom.png", "rb") as img:
+                            await self.bot.send_photo(
+                                chat_id=CHANNEL_USERNAME,
+                                photo=img,
+                                caption=caption
+                            )
+                        print(f"📤 Postado com imagem de {cupom['fonte']}: {titulo}")
+                    else:
+                        # Fallback: envia apenas o texto
+                        await self.bot.send_message(
                             chat_id=CHANNEL_USERNAME,
-                            photo=img,
-                            caption=caption
+                            text=caption
                         )
-                    print(f"📤 Postado com imagem de {cupom['fonte']}: {titulo}")
-                else:
-                    # Fallback: envia apenas o texto
-                    await self.bot.send_message(
-                        chat_id=CHANNEL_USERNAME,
-                        text=caption
-                    )
-                    print(f"📤 Postado sem imagem de {cupom['fonte']} (imagem não encontrada): {titulo}")
+                        print(f"📤 Postado sem imagem de {cupom['fonte']} (imagem não encontrada): {titulo}")
 
-                self.posted_coupons.add(titulo)  # Adiciona ao histórico
-                print(f"Cupons postados até agora: {len(self.posted_coupons)}")
+                    self.posted_coupons.add(titulo)  # Adiciona ao histórico
+                    print(f"Cupons postados até agora: {len(self.posted_coupons)}")
 
-            except Exception as e:
-                print(f"Erro ao postar cupom '{titulo}' de {cupom['fonte']}: {e}")
+                except Exception as e:
+                    print(f"Erro ao postar cupom '{titulo}' de {cupom['fonte']}: {e}")
+            else:
+                print("Nenhum novo cupom para postar.")
 
         except Exception as e:
             print(f"Erro geral no post_cupons: {e}")
             raise
 
     async def run(self):
-        keep_alive()  # Mantém o servidor Flask ativo (opcional no Render)
         retry_count = 0
 
         while self.should_restart:
@@ -174,6 +174,7 @@ class BotManager:
                 while self.should_restart:
                     try:
                         await self.post_cupons()
+                        print(f"Aguardando próximo ciclo em {POST_INTERVAL} segundos...")
                         await asyncio.sleep(POST_INTERVAL)
                     except Exception as e:
                         print(f"\n⚠️ Erro durante operação: {e}")
