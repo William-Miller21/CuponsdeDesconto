@@ -7,6 +7,7 @@ from telegram import Bot
 from dotenv import load_dotenv
 import random
 import signal
+from flask import Flask
 
 load_dotenv()
 
@@ -24,6 +25,12 @@ GOOGLE_CX = os.getenv("GOOGLE_CX")
 
 if not all([BOT_TOKEN, CHANNEL_USERNAME]):
     raise ValueError("Variáveis de ambiente essenciais não configuradas!")
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot ativo! ✅"
 
 class BotManager:
     def __init__(self):
@@ -122,7 +129,7 @@ class BotManager:
                     titulo = cupom["titulo"]
                     descricao = cupom["descricao"]
                     link = shorten_url(cupom["link"])
-                    caption = f"🎁 {titulo}\n\n📝 {descricao}\n\n🔗 {link}"
+                    caption = f"🎁 {titulo}\n\n📝 {descricao}\n\n🔗 {link}"  # Sem a fonte
 
                     # Tenta baixar imagem do cupom, se disponível
                     imagem_gerada = False
@@ -162,6 +169,14 @@ class BotManager:
 
     async def run(self):
         retry_count = 0
+
+        # Inicia o servidor Flask em uma thread separada
+        def run_flask():
+            app.run(host='0.0.0.0', port=8080)
+
+        import threading
+        flask_thread = threading.Thread(target=run_flask, daemon=True)
+        flask_thread.start()
 
         while self.should_restart:
             try:
